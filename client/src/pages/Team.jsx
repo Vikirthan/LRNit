@@ -119,7 +119,7 @@ export default function Team() {
                                 <div className="shrink-0 relative">
                                     <div className="w-48 h-48 md:w-56 md:h-56 rounded-full overflow-hidden border-4 border-white shadow-xl relative z-10">
                                         <img
-                                            src={ceo.photoUrl || '/placeholder-user.jpg'}
+                                            src={ceo.photo_url || '/placeholder-user.jpg'}
                                             alt={ceo.name}
                                             className="w-full h-full object-cover"
                                         />
@@ -170,7 +170,7 @@ export default function Team() {
                                                 {teamMembers.map((member) => (
                                                     <div key={member.id} className="flex items-center space-x-4 p-2 rounded-xl hover:bg-lightTechBackground transition-colors">
                                                         <div className="h-12 w-12 rounded-full overflow-hidden border border-gray-100 shrink-0">
-                                                            <img src={member.photo_url || member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
+                                                            <img src={member.photo_url} alt={member.name} className="w-full h-full object-cover" />
                                                         </div>
                                                         <div>
                                                             <p className="font-semibold text-gray-800 text-sm">{member.name}</p>

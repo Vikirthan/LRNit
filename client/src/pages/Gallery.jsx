@@ -13,13 +13,13 @@ export default function Gallery() {
 
     // Fallback temporary data
     const fallbackData = [
-        { id: '1', title: 'Campus Hackathon 2025', category: 'Events', photo_url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80', date: '2025-03-10' },
-        { id: '2', title: 'React Workshop', category: 'Workshops', photo_url: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=800&q=80', date: '2025-02-15' },
-        { id: '3', title: 'Team Building Retreat', category: 'Team Moments', photo_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80', date: '2025-01-20' },
-        { id: '4', title: 'AI Seminar', category: 'Technical Activities', photo_url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=800&q=80', date: '2024-11-05' },
-        { id: '5', title: 'Tree Planting Drive', category: 'Community Activities', photo_url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80', date: '2024-10-12' },
-        { id: '6', title: 'Annual Tech Summit', category: 'Events', photo_url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80', date: '2024-09-25' },
-        { id: '7', title: 'Brainstorming Session', category: 'Team Moments', photo_url: 'https://images.unsplash.com/photo-1531538606174-0f90ff5dce83?auto=format&fit=crop&w=800&q=80', date: '2024-08-10' },
+        { id: '1', caption: 'Campus Hackathon 2025', category: 'Events', url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80', date: '2025-03-10' },
+        { id: '2', caption: 'React Workshop', category: 'Workshops', url: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=800&q=80', date: '2025-02-15' },
+        { id: '3', caption: 'Team Building Retreat', category: 'Team Moments', url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80', date: '2025-01-20' },
+        { id: '4', caption: 'AI Seminar', category: 'Technical Activities', url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=800&q=80', date: '2024-11-05' },
+        { id: '5', caption: 'Tree Planting Drive', category: 'Community Activities', url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80', date: '2024-10-12' },
+        { id: '6', caption: 'Annual Tech Summit', category: 'Events', url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80', date: '2024-09-25' },
+        { id: '7', caption: 'Brainstorming Session', category: 'Team Moments', url: 'https://images.unsplash.com/photo-1531538606174-0f90ff5dce83?auto=format&fit=crop&w=800&q=80', date: '2024-08-10' },
     ];
 
     useEffect(() => {
@@ -118,8 +118,8 @@ export default function Gallery() {
                                         onClick={() => setSelectedImage(img)}
                                     >
                                         <img
-                                            src={img.photo_url || img.imageUrl}
-                                            alt={img.title}
+                                            src={img.url}
+                                            alt={img.caption}
                                             className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
                                             loading="lazy"
                                         />
@@ -130,7 +130,7 @@ export default function Gallery() {
                                             <span className="text-xs font-bold text-innovationPurple uppercase tracking-wider mb-1 bg-white/10 w-max px-2 py-1 rounded-sm backdrop-blur-sm">
                                                 {img.category}
                                             </span>
-                                            <h3 className="text-xl font-display font-semibold text-white">{img.title}</h3>
+                                            <h3 className="text-xl font-display font-semibold text-white">{img.caption}</h3>
                                             {img.date && (
                                                 <p className="text-white/70 text-sm mt-1">{new Date(img.date).toLocaleDateString()}</p>
                                             )}
@@ -173,12 +173,12 @@ export default function Gallery() {
                             onClick={(e) => e.stopPropagation()}
                         >
                             <img
-                                src={selectedImage.photo_url || selectedImage.imageUrl}
-                                alt={selectedImage.title}
+                                src={selectedImage.url}
+                                alt={selectedImage.caption}
                                 className="max-w-full max-h-[calc(85vh-80px)] object-contain rounded-lg shadow-2xl"
                             />
                             <div className="w-full text-center mt-6">
-                                <h3 className="text-2xl font-display font-bold text-white mb-2">{selectedImage.title}</h3>
+                                <h3 className="text-2xl font-display font-bold text-white mb-2">{selectedImage.caption}</h3>
                                 <p className="text-white/60">
                                     <span className="text-innovationPurple font-medium mr-2">{selectedImage.category}</span>
                                     {selectedImage.date && `• ${new Date(selectedImage.date).toLocaleDateString()}`}
