@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ZoomIn, Image as ImageIcon } from 'lucide-react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { supabase } from '../supabaseClient';
 
 const CATEGORIES = ['All', 'Events', 'Team Moments', 'Workshops', 'Technical Activities', 'Community Activities'];
 
@@ -15,22 +13,32 @@ export default function Gallery() {
 
     // Fallback temporary data
     const fallbackData = [
-        { _id: '1', title: 'Campus Hackathon 2025', category: 'Events', photoUrl: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80', date: '2025-03-10' },
-        { _id: '2', title: 'React Workshop', category: 'Workshops', photoUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=800&q=80', date: '2025-02-15' },
-        { _id: '3', title: 'Team Building Retreat', category: 'Team Moments', photoUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80', date: '2025-01-20' },
-        { _id: '4', title: 'AI Seminar', category: 'Technical Activities', photoUrl: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=800&q=80', date: '2024-11-05' },
-        { _id: '5', title: 'Tree Planting Drive', category: 'Community Activities', photoUrl: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80', date: '2024-10-12' },
-        { _id: '6', title: 'Annual Tech Summit', category: 'Events', photoUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80', date: '2024-09-25' },
-        { _id: '7', title: 'Brainstorming Session', category: 'Team Moments', photoUrl: 'https://images.unsplash.com/photo-1531538606174-0f90ff5dce83?auto=format&fit=crop&w=800&q=80', date: '2024-08-10' },
+        { id: '1', title: 'Campus Hackathon 2025', category: 'Events', photo_url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80', date: '2025-03-10' },
+        { id: '2', title: 'React Workshop', category: 'Workshops', photo_url: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=800&q=80', date: '2025-02-15' },
+        { id: '3', title: 'Team Building Retreat', category: 'Team Moments', photo_url: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80', date: '2025-01-20' },
+        { id: '4', title: 'AI Seminar', category: 'Technical Activities', photo_url: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=800&q=80', date: '2024-11-05' },
+        { id: '5', title: 'Tree Planting Drive', category: 'Community Activities', photo_url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=800&q=80', date: '2024-10-12' },
+        { id: '6', title: 'Annual Tech Summit', category: 'Events', photo_url: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?auto=format&fit=crop&w=800&q=80', date: '2024-09-25' },
+        { id: '7', title: 'Brainstorming Session', category: 'Team Moments', photo_url: 'https://images.unsplash.com/photo-1531538606174-0f90ff5dce83?auto=format&fit=crop&w=800&q=80', date: '2024-08-10' },
     ];
 
     useEffect(() => {
         const fetchGallery = async () => {
             try {
-                const res = await axios.get(`${API_URL}/gallery`);
-                setImages(res.data);
+                const { data, error } = await supabase
+                    .from('gallery')
+                    .select('*')
+                    .order('date', { ascending: false });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    setImages(data);
+                } else {
+                    setImages(fallbackData);
+                }
             } catch (err) {
-                console.warn("Backend not connected yet. Using fallback data for gallery.");
+                console.warn("Supabase error fetching gallery. Using fallback data.");
                 setImages(fallbackData);
             } finally {
                 setLoading(false);
@@ -105,12 +113,12 @@ export default function Gallery() {
                                         animate={{ opacity: 1, scale: 1 }}
                                         exit={{ opacity: 0, scale: 0.9 }}
                                         transition={{ duration: 0.3 }}
-                                        key={img._id}
+                                        key={img.id}
                                         className="break-inside-avoid relative group rounded-2xl overflow-hidden shadow-sm hover:shadow-xl cursor-pointer bg-white"
                                         onClick={() => setSelectedImage(img)}
                                     >
                                         <img
-                                            src={img.imageUrl || img.photoUrl}
+                                            src={img.photo_url || img.imageUrl}
                                             alt={img.title}
                                             className="w-full h-auto object-cover transform group-hover:scale-105 transition-transform duration-700"
                                             loading="lazy"
@@ -165,7 +173,7 @@ export default function Gallery() {
                             onClick={(e) => e.stopPropagation()}
                         >
                             <img
-                                src={selectedImage.imageUrl || selectedImage.photoUrl}
+                                src={selectedImage.photo_url || selectedImage.imageUrl}
                                 alt={selectedImage.title}
                                 className="max-w-full max-h-[calc(85vh-80px)] object-contain rounded-lg shadow-2xl"
                             />

@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Crown, ChevronDown } from 'lucide-react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { supabase } from '../supabaseClient';
 
 const fadeIn = {
     initial: { opacity: 0, y: 20 },
@@ -18,11 +16,11 @@ export default function Team() {
 
     // Fallback temporary data while backend is disconnected
     const fallbackData = [
-        { _id: '1', name: 'Vikirthan T', role: 'Chief Executive Officer', team: 'Executive', photoUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80', isCeo: true },
-        { _id: '2', name: 'Alice Smith', role: 'Lead Developer', team: 'Tech Team', photoUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80' },
-        { _id: '3', name: 'Bob Johnson', role: 'Marketing Head', team: 'Marketing Team', photoUrl: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=400&q=80' },
-        { _id: '4', name: 'Charlie Brown', role: 'PR Manager', team: 'PR Team', photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80' },
-        { _id: '5', name: 'David Lee', role: 'Event Coordinator', team: 'Event Planning & Management', photoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80' },
+        { id: '1', name: 'Vikirthan T', role: 'Chief Executive Officer', team_name: 'Executive', photo_url: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80', isCeo: true },
+        { id: '2', name: 'Alice Smith', role: 'Lead Developer', team_name: 'Tech Team', photo_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80' },
+        { id: '3', name: 'Bob Johnson', role: 'Marketing Head', team_name: 'Marketing Team', photo_url: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=400&q=80' },
+        { id: '4', name: 'Charlie Brown', role: 'PR Manager', team_name: 'PR Team', photo_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80' },
+        { id: '5', name: 'David Lee', role: 'Event Coordinator', team_name: 'Event Planning & Management', photo_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80' },
     ];
 
     const TEAMS_CONFIG = [
@@ -39,10 +37,20 @@ export default function Team() {
     useEffect(() => {
         const fetchTeam = async () => {
             try {
-                const res = await axios.get(`${API_URL}/team`);
-                setMembers(res.data);
+                const { data, error } = await supabase
+                    .from('team')
+                    .select('*')
+                    .order('display_order', { ascending: true });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    setMembers(data);
+                } else {
+                    setMembers(fallbackData);
+                }
             } catch (err) {
-                console.warn("Backend not connected yet. Using fallback data for team.");
+                console.warn("Supabase error fetching team. Using fallback data.");
                 setMembers(fallbackData);
             } finally {
                 setLoading(false);
@@ -56,7 +64,7 @@ export default function Team() {
 
     // Helper to group members by team
     const getMembersByTeam = (teamName) => {
-        return members.filter(m => m.team === teamName && m._id !== ceo._id);
+        return members.filter(m => m.team_name === teamName && m.id !== ceo.id);
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center">Loading team...</div>;
@@ -160,9 +168,9 @@ export default function Team() {
                                         {teamMembers.length > 0 ? (
                                             <div className="space-y-4">
                                                 {teamMembers.map((member) => (
-                                                    <div key={member._id} className="flex items-center space-x-4 p-2 rounded-xl hover:bg-lightTechBackground transition-colors">
+                                                    <div key={member.id} className="flex items-center space-x-4 p-2 rounded-xl hover:bg-lightTechBackground transition-colors">
                                                         <div className="h-12 w-12 rounded-full overflow-hidden border border-gray-100 shrink-0">
-                                                            <img src={member.photoUrl || member.imageUrl || '/placeholder-user.jpg'} alt={member.name} className="w-full h-full object-cover" />
+                                                            <img src={member.photo_url || member.photoUrl} alt={member.name} className="w-full h-full object-cover" />
                                                         </div>
                                                         <div>
                                                             <p className="font-semibold text-gray-800 text-sm">{member.name}</p>

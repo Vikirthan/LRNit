@@ -4,35 +4,38 @@ import {
     LayoutDashboard, Calendar, Users, Image, LogOut, Plus, Trash2, Edit3,
     Upload, X, Save, Cpu, Menu, ChevronDown
 } from 'lucide-react';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
-function getToken() {
-    return localStorage.getItem('lrnit_token');
-}
-
-function authHeaders() {
-    return { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` };
-}
+import { supabase } from '../supabaseClient';
 
 // ─── Dashboard Overview ──────────────────────────────
 function Overview() {
     const [stats, setStats] = useState({ events: 0, team: 0, gallery: 0, announcements: 0 });
 
     useEffect(() => {
-        Promise.all([
-            fetch(`${API}/events`).then(r => r.json()),
-            fetch(`${API}/team`).then(r => r.json()),
-            fetch(`${API}/gallery`).then(r => r.json()),
-            fetch(`${API}/announcements`).then(r => r.json()),
-        ]).then(([events, team, gallery, announcements]) => {
-            setStats({
-                events: Array.isArray(events) ? events.length : 0,
-                team: Array.isArray(team) ? team.length : 0,
-                gallery: Array.isArray(gallery) ? gallery.length : 0,
-                announcements: Array.isArray(announcements) ? announcements.length : 0,
-            });
-        }).catch(() => { });
+        const fetchStats = async () => {
+            try {
+                const [
+                    { count: eventsCount },
+                    { count: teamCount },
+                    { count: galleryCount },
+                    { count: announcementsCount }
+                ] = await Promise.all([
+                    supabase.from('events').select('*', { count: 'exact', head: true }),
+                    supabase.from('team').select('*', { count: 'exact', head: true }),
+                    supabase.from('gallery').select('*', { count: 'exact', head: true }),
+                    supabase.from('announcements').select('*', { count: 'exact', head: true }),
+                ]);
+
+                setStats({
+                    events: eventsCount || 0,
+                    team: teamCount || 0,
+                    gallery: galleryCount || 0,
+                    announcements: announcementsCount || 0,
+                });
+            } catch (err) {
+                console.error("Error fetching stats:", err);
+            }
+        };
+        fetchStats();
     }, []);
 
     const cards = [
@@ -68,20 +71,31 @@ function ImageUpload({ onUploaded }) {
         const file = e.target.files[0];
         if (!file) return;
         setUploading(true);
-        const formData = new FormData();
-        formData.append('image', file);
+
         try {
-            const res = await fetch(`${API}/upload`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${getToken()}` },
-                body: formData,
-            });
-            const data = await res.json();
-            if (res.ok) onUploaded(data.imageUrl);
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `${fileName}`;
+
+            let { error: uploadError } = await supabase.storage
+                .from('images')
+                .upload(filePath, file);
+
+            if (uploadError) {
+                throw uploadError;
+            }
+
+            const { data } = supabase.storage
+                .from('images')
+                .getPublicUrl(filePath);
+
+            onUploaded(data.publicUrl);
         } catch (err) {
-            alert('Upload failed');
+            console.error('Error uploading image:', err);
+            alert('Upload failed: ' + err.message);
+        } finally {
+            setUploading(false);
         }
-        setUploading(false);
     };
 
     return (
@@ -98,35 +112,53 @@ function EventsManager() {
     const [events, setEvents] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ title: '', category: 'Technical', date: '', description: '', status: 'Upcoming', imageUrl: '', isFeatured: false, bannerColor: '#0B3D91' });
+    const [form, setForm] = useState({ title: '', category: 'Technical', date: '', description: '', status: 'Upcoming', image_url: '', is_featured: false, banner_color: '#0B3D91' });
 
-    const load = () => fetch(`${API}/events`).then(r => r.json()).then(d => { if (Array.isArray(d)) setEvents(d); });
+    const load = async () => {
+        const { data, error } = await supabase.from('events').select('*').order('date', { ascending: false });
+        if (!error) setEvents(data);
+    };
+
     useEffect(() => { load(); }, []);
 
     const resetForm = () => {
-        setForm({ title: '', category: 'Technical', date: '', description: '', status: 'Upcoming', imageUrl: '', isFeatured: false, bannerColor: '#0B3D91' });
+        setForm({ title: '', category: 'Technical', date: '', description: '', status: 'Upcoming', image_url: '', is_featured: false, banner_color: '#0B3D91' });
         setEditing(null);
         setShowForm(false);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const method = editing ? 'PUT' : 'POST';
-        const url = editing ? `${API}/events/${editing}` : `${API}/events`;
-        await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(form) });
+        if (editing) {
+            const { error } = await supabase.from('events').update(form).eq('id', editing);
+            if (error) alert(error.message);
+        } else {
+            const { error } = await supabase.from('events').insert([form]);
+            if (error) alert(error.message);
+        }
         resetForm();
         load();
     };
 
     const handleDelete = async (id) => {
         if (!confirm('Delete this event?')) return;
-        await fetch(`${API}/events/${id}`, { method: 'DELETE', headers: authHeaders() });
+        const { error } = await supabase.from('events').delete().eq('id', id);
+        if (error) alert(error.message);
         load();
     };
 
     const startEdit = (ev) => {
-        setForm({ title: ev.title, category: ev.category, date: ev.date?.split('T')[0] || '', description: ev.description, status: ev.status, imageUrl: ev.imageUrl || '', isFeatured: ev.isFeatured, bannerColor: ev.bannerColor || '#0B3D91' });
-        setEditing(ev._id);
+        setForm({
+            title: ev.title,
+            category: ev.category,
+            date: ev.date ? new Date(ev.date).toISOString().split('T')[0] : '',
+            description: ev.description,
+            status: ev.status,
+            image_url: ev.image_url || '',
+            is_featured: ev.is_featured,
+            banner_color: ev.banner_color || '#0B3D91'
+        });
+        setEditing(ev.id);
         setShowForm(true);
     };
 
@@ -148,7 +180,7 @@ function EventsManager() {
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input className="admin-input" placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
                         <select className="admin-input" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                            {['Technical', 'Non-Technical', 'Workshop', 'Cultural'].map(c => <option key={c} value={c}>{c}</option>)}
+                            {['Technical', 'Non-Technical', 'Workshops', 'Competitions', 'Campus Activities'].map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                         <input className="admin-input" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
                         <select className="admin-input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
@@ -156,15 +188,15 @@ function EventsManager() {
                         </select>
                         <textarea className="admin-input md:col-span-2" placeholder="Description" rows="3" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required />
                         <div className="flex items-center gap-4">
-                            <ImageUpload onUploaded={(url) => setForm({ ...form, imageUrl: url })} />
-                            {form.imageUrl && <span className="text-xs text-green-400 truncate max-w-[200px]">✓ Image set</span>}
+                            <ImageUpload onUploaded={(url) => setForm({ ...form, image_url: url })} />
+                            {form.image_url && <span className="text-xs text-green-400 truncate max-w-[200px]">✓ Image set</span>}
                         </div>
                         <div className="flex items-center gap-2">
-                            <input type="checkbox" id="featured" checked={form.isFeatured} onChange={e => setForm({ ...form, isFeatured: e.target.checked })} className="rounded" />
+                            <input type="checkbox" id="featured" checked={form.is_featured} onChange={e => setForm({ ...form, is_featured: e.target.checked })} className="rounded" />
                             <label htmlFor="featured" className="text-gray-300 text-sm border-r border-gray-600 pr-4">Featured</label>
 
                             <label className="text-gray-300 text-sm ml-2">Banner Color</label>
-                            <input type="color" className="p-0 border-none rounded cursor-pointer h-8 w-12 bg-transparent" value={form.bannerColor} onChange={e => setForm({ ...form, bannerColor: e.target.value })} />
+                            <input type="color" className="p-0 border-none rounded cursor-pointer h-8 w-12 bg-transparent" value={form.banner_color} onChange={e => setForm({ ...form, banner_color: e.target.value })} />
                         </div>
                         <div className="md:col-span-2">
                             <button type="submit" className="flex items-center gap-2 px-6 py-2 bg-primaryTechBlue text-white rounded-lg hover:bg-blue-600 transition">
@@ -177,7 +209,7 @@ function EventsManager() {
 
             <div className="space-y-3">
                 {events.map(ev => (
-                    <div key={ev._id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
+                    <div key={ev.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
                         <div>
                             <h3 className="text-white font-medium">{ev.title}</h3>
                             <div className="flex gap-3 mt-1">
@@ -188,7 +220,7 @@ function EventsManager() {
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => startEdit(ev)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"><Edit3 className="h-4 w-4" /></button>
-                            <button onClick={() => handleDelete(ev._id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-4 w-4" /></button>
+                            <button onClick={() => handleDelete(ev.id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-4 w-4" /></button>
                         </div>
                     </div>
                 ))}
@@ -203,31 +235,40 @@ function TeamManager() {
     const [members, setMembers] = useState([]);
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState(null);
-    const [form, setForm] = useState({ name: '', role: '', team: 'Tech Team', photoUrl: '', displayOrder: 0 });
+    const [form, setForm] = useState({ name: '', role: '', team_name: 'Tech Team', photo_url: '', display_order: 0 });
 
-    const load = () => fetch(`${API}/team`).then(r => r.json()).then(d => { if (Array.isArray(d)) setMembers(d); });
+    const load = async () => {
+        const { data, error } = await supabase.from('team').select('*').order('display_order', { ascending: true });
+        if (!error) setMembers(data);
+    };
+
     useEffect(() => { load(); }, []);
 
-    const resetForm = () => { setForm({ name: '', role: '', team: 'Tech Team', photoUrl: '', displayOrder: 0 }); setEditing(null); setShowForm(false); };
+    const resetForm = () => { setForm({ name: '', role: '', team_name: 'Tech Team', photo_url: '', display_order: 0 }); setEditing(null); setShowForm(false); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const method = editing ? 'PUT' : 'POST';
-        const url = editing ? `${API}/team/${editing}` : `${API}/team`;
-        await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(form) });
+        if (editing) {
+            const { error } = await supabase.from('team').update(form).eq('id', editing);
+            if (error) alert(error.message);
+        } else {
+            const { error } = await supabase.from('team').insert([form]);
+            if (error) alert(error.message);
+        }
         resetForm();
         load();
     };
 
     const handleDelete = async (id) => {
         if (!confirm('Delete this member?')) return;
-        await fetch(`${API}/team/${id}`, { method: 'DELETE', headers: authHeaders() });
+        const { error } = await supabase.from('team').delete().eq('id', id);
+        if (error) alert(error.message);
         load();
     };
 
     const startEdit = (m) => {
-        setForm({ name: m.name, role: m.role, team: m.team, photoUrl: m.photoUrl || '', displayOrder: m.displayOrder || 0 });
-        setEditing(m._id);
+        setForm({ name: m.name, role: m.role, team_name: m.team_name, photo_url: m.photo_url || '', display_order: m.display_order || 0 });
+        setEditing(m.id);
         setShowForm(true);
     };
 
@@ -249,13 +290,13 @@ function TeamManager() {
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input className="admin-input" placeholder="Full Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
                         <input className="admin-input" placeholder="Role / Title" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} required />
-                        <select className="admin-input" value={form.team} onChange={e => setForm({ ...form, team: e.target.value })}>
+                        <select className="admin-input" value={form.team_name} onChange={e => setForm({ ...form, team_name: e.target.value })}>
                             {['Tech Team', 'Website Enthusiasts', 'Event Planning & Management', 'Media Team', 'Marketing Team', 'PR Team', 'Sponsorship Team', 'HR Team'].map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
-                        <input className="admin-input" type="number" placeholder="Display Order" value={form.displayOrder} onChange={e => setForm({ ...form, displayOrder: parseInt(e.target.value) || 0 })} />
+                        <input className="admin-input" type="number" placeholder="Display Order" value={form.display_order} onChange={e => setForm({ ...form, display_order: parseInt(e.target.value) || 0 })} />
                         <div className="flex items-center gap-4">
-                            <ImageUpload onUploaded={(url) => setForm({ ...form, photoUrl: url })} />
-                            {form.photoUrl && <span className="text-xs text-green-400 truncate max-w-[200px]">✓ Photo set</span>}
+                            <ImageUpload onUploaded={(url) => setForm({ ...form, photo_url: url })} />
+                            {form.photo_url && <span className="text-xs text-green-400 truncate max-w-[200px]">✓ Photo set</span>}
                         </div>
                         <div className="md:col-span-2">
                             <button type="submit" className="flex items-center gap-2 px-6 py-2 bg-primaryTechBlue text-white rounded-lg hover:bg-blue-600 transition">
@@ -268,23 +309,23 @@ function TeamManager() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {members.map(m => (
-                    <div key={m._id} className="bg-white/5 border border-white/10 rounded-xl p-4">
+                    <div key={m.id} className="bg-white/5 border border-white/10 rounded-xl p-4">
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                                {m.photoUrl ? (
-                                    <img src={m.photoUrl} alt={m.name} className="h-12 w-12 rounded-full object-cover" />
+                                {m.photo_url ? (
+                                    <img src={m.photo_url} alt={m.name} className="h-12 w-12 rounded-full object-cover" />
                                 ) : (
                                     <div className="h-12 w-12 rounded-full bg-primaryTechBlue/20 flex items-center justify-center text-primaryTechBlue font-bold">{m.name?.charAt(0)}</div>
                                 )}
                                 <div>
                                     <h3 className="text-white font-medium">{m.name}</h3>
                                     <p className="text-gray-400 text-sm">{m.role}</p>
-                                    <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 mt-1 inline-block">{m.team}</span>
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 mt-1 inline-block">{m.team_name}</span>
                                 </div>
                             </div>
                             <div className="flex gap-1">
                                 <button onClick={() => startEdit(m)} className="p-1.5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"><Edit3 className="h-3.5 w-3.5" /></button>
-                                <button onClick={() => handleDelete(m._id)} className="p-1.5 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-3.5 w-3.5" /></button>
+                                <button onClick={() => handleDelete(m.id)} className="p-1.5 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>
                         </div>
                     </div>
@@ -299,31 +340,38 @@ function TeamManager() {
 function GalleryManager() {
     const [images, setImages] = useState([]);
     const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState({ title: '', category: 'Events', customCategory: '', imageUrl: '' });
+    const [form, setForm] = useState({ title: '', category: 'Events', customCategory: '', url: '' });
 
-    const load = () => fetch(`${API}/gallery`).then(r => r.json()).then(d => { if (Array.isArray(d)) setImages(d); });
+    const load = async () => {
+        const { data, error } = await supabase.from('gallery').select('*').order('created_at', { ascending: false });
+        if (!error) setImages(data);
+    };
+
     useEffect(() => { load(); }, []);
 
-    const resetForm = () => { setForm({ title: '', category: 'Events', customCategory: '', imageUrl: '' }); setShowForm(false); };
+    const resetForm = () => { setForm({ title: '', category: 'Events', customCategory: '', url: '' }); setShowForm(false); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!form.imageUrl) { alert('Please upload an image first.'); return; }
+        if (!form.url) { alert('Please upload an image first.'); return; }
 
         const submitData = {
-            title: form.title,
+            caption: form.title,
             category: form.category === 'Other' ? form.customCategory : form.category,
-            imageUrl: form.imageUrl,
+            url: form.url,
         };
 
-        await fetch(`${API}/gallery`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(submitData) });
+        const { error } = await supabase.from('gallery').insert([submitData]);
+        if (error) alert(error.message);
+
         resetForm();
         load();
     };
 
     const handleDelete = async (id) => {
         if (!confirm('Delete this image?')) return;
-        await fetch(`${API}/gallery/${id}`, { method: 'DELETE', headers: authHeaders() });
+        const { error } = await supabase.from('gallery').delete().eq('id', id);
+        if (error) alert(error.message);
         load();
     };
 
@@ -343,7 +391,7 @@ function GalleryManager() {
                         <button onClick={resetForm} className="text-gray-400 hover:text-white"><X className="h-5 w-5" /></button>
                     </div>
                     <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input className="admin-input" placeholder="Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+                        <input className="admin-input" placeholder="Title/Caption" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
                         <div className="flex gap-2">
                             <select className="admin-input flex-1" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
                                 {['Events', 'Team Moments', 'Workshops', 'Technical Activities', 'Community Activities', 'Other'].map(c => <option key={c} value={c}>{c}</option>)}
@@ -353,8 +401,8 @@ function GalleryManager() {
                             )}
                         </div>
                         <div className="flex items-center gap-4 md:col-span-2">
-                            <ImageUpload onUploaded={(url) => setForm({ ...form, imageUrl: url })} />
-                            {form.imageUrl && <span className="text-xs text-green-400">✓ Image uploaded</span>}
+                            <ImageUpload onUploaded={(url) => setForm({ ...form, url: url })} />
+                            {form.url && <span className="text-xs text-green-400">✓ Image uploaded</span>}
                         </div>
                         <div className="md:col-span-2">
                             <button type="submit" className="flex items-center gap-2 px-6 py-2 bg-primaryTechBlue text-white rounded-lg hover:bg-blue-600 transition">
@@ -367,11 +415,11 @@ function GalleryManager() {
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {images.map(img => (
-                    <div key={img._id} className="relative group rounded-xl overflow-hidden border border-white/10">
-                        <img src={img.imageUrl} alt={img.title} className="w-full h-40 object-cover" />
+                    <div key={img.id} className="relative group rounded-xl overflow-hidden border border-white/10">
+                        <img src={img.url} alt={img.caption} className="w-full h-40 object-cover" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                            <p className="text-white text-sm font-medium">{img.title}</p>
-                            <button onClick={() => handleDelete(img._id)} className="flex items-center gap-1 px-3 py-1 bg-red-500/80 text-white text-xs rounded-lg hover:bg-red-600 transition">
+                            <p className="text-white text-sm font-medium">{img.caption}</p>
+                            <button onClick={() => handleDelete(img.id)} className="flex items-center gap-1 px-3 py-1 bg-red-500/80 text-white text-xs rounded-lg hover:bg-red-600 transition">
                                 <Trash2 className="h-3 w-3" /> Delete
                             </button>
                         </div>
@@ -390,29 +438,38 @@ function AnnouncementsManager() {
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({ title: '', content: '', priority: 'Normal' });
 
-    const load = () => fetch(`${API}/announcements`).then(r => r.json()).then(d => { if (Array.isArray(d)) setAnnouncements(d); });
+    const load = async () => {
+        const { data, error } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+        if (!error) setAnnouncements(data);
+    };
+
     useEffect(() => { load(); }, []);
 
     const resetForm = () => { setForm({ title: '', content: '', priority: 'Normal' }); setEditing(null); setShowForm(false); };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const method = editing ? 'PUT' : 'POST';
-        const url = editing ? `${API}/announcements/${editing}` : `${API}/announcements`;
-        await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(form) });
+        if (editing) {
+            const { error } = await supabase.from('announcements').update(form).eq('id', editing);
+            if (error) alert(error.message);
+        } else {
+            const { error } = await supabase.from('announcements').insert([form]);
+            if (error) alert(error.message);
+        }
         resetForm();
         load();
     };
 
     const handleDelete = async (id) => {
         if (!confirm('Delete this announcement?')) return;
-        await fetch(`${API}/announcements/${id}`, { method: 'DELETE', headers: authHeaders() });
+        const { error } = await supabase.from('announcements').delete().eq('id', id);
+        if (error) alert(error.message);
         load();
     };
 
     const startEdit = (a) => {
         setForm({ title: a.title, content: a.content, priority: a.priority });
-        setEditing(a._id);
+        setEditing(a.id);
         setShowForm(true);
     };
 
@@ -448,18 +505,18 @@ function AnnouncementsManager() {
 
             <div className="space-y-3">
                 {announcements.map(a => (
-                    <div key={a._id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-start justify-between">
+                    <div key={a.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-start justify-between">
                         <div>
                             <h3 className="text-white font-medium">{a.title}</h3>
                             <p className="text-gray-400 text-sm mt-1">{a.content}</p>
                             <div className="flex gap-3 mt-2">
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${a.priority === 'High' ? 'bg-red-500/20 text-red-300' : a.priority === 'Normal' ? 'bg-blue-500/20 text-blue-300' : 'bg-gray-500/20 text-gray-400'}`}>{a.priority} Priority</span>
-                                <span className="text-xs text-gray-500">{new Date(a.date).toLocaleDateString()}</span>
+                                <span className="text-xs text-gray-500">{new Date(a.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>
                         <div className="flex gap-2 shrink-0">
                             <button onClick={() => startEdit(a)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"><Edit3 className="h-4 w-4" /></button>
-                            <button onClick={() => handleDelete(a._id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-4 w-4" /></button>
+                            <button onClick={() => handleDelete(a.id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-4 w-4" /></button>
                         </div>
                     </div>
                 ))}
@@ -474,13 +531,21 @@ export default function AdminDashboard() {
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!getToken()) navigate('/lrnit-admin');
+        const checkAuth = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                navigate('/lrnit-admin');
+            }
+            setLoading(false);
+        };
+        checkAuth();
     }, [navigate]);
 
-    const handleLogout = () => {
-        localStorage.removeItem('lrnit_token');
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
         localStorage.removeItem('lrnit_user');
         navigate('/lrnit-admin');
     };
@@ -494,6 +559,8 @@ export default function AdminDashboard() {
     ];
 
     const isActive = (path) => location.pathname === path;
+
+    if (loading) return <div className="min-h-screen bg-[#0a0f1a] flex items-center justify-center text-white">Loading...</div>;
 
     return (
         <div className="min-h-screen bg-[#0a0f1a] flex">

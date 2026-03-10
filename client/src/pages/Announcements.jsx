@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Megaphone, Clock, AlertCircle } from 'lucide-react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { supabase } from '../supabaseClient';
 
 const staggerContainer = {
     hidden: { opacity: 0 },
@@ -20,18 +18,28 @@ export default function Announcements() {
     const [loading, setLoading] = useState(true);
 
     const fallbackData = [
-        { _id: '1', title: 'Welcome to LRNit!', content: 'We are thrilled to launch our new portal. Stay tuned for exciting technical workshops and hackathons coming this semester!', date: new Date().toISOString(), priority: 'High' },
-        { _id: '2', title: 'Cyber Security Workshop Details', content: 'The venue for the upcoming Cyber Security Workshop has been shifted to Block 32, Room 402. Please carry your laptops and have Wireshark installed.', date: new Date(Date.now() - 86400000).toISOString(), priority: 'Normal' },
-        { _id: '3', title: 'Call for Core Team Members', content: 'We are recruiting designers, web developers, and event coordinators. Fill out the form in your student email before next Friday to apply!', date: new Date(Date.now() - 172800000).toISOString(), priority: 'Low' },
+        { id: '1', title: 'Welcome to LRNit!', content: 'We are thrilled to launch our new portal. Stay tuned for exciting technical workshops and hackathons coming this semester!', date: new Date().toISOString(), priority: 'High' },
+        { id: '2', title: 'Cyber Security Workshop Details', content: 'The venue for the upcoming Cyber Security Workshop has been shifted to Block 32, Room 402. Please carry your laptops and have Wireshark installed.', date: new Date(Date.now() - 86400000).toISOString(), priority: 'Normal' },
+        { id: '3', title: 'Call for Core Team Members', content: 'We are recruiting designers, web developers, and event coordinators. Fill out the form in your student email before next Friday to apply!', date: new Date(Date.now() - 172800000).toISOString(), priority: 'Low' },
     ];
 
     useEffect(() => {
         const fetchAnnouncements = async () => {
             try {
-                const res = await axios.get(`${API_URL}/announcements`);
-                setAnnouncements(res.data);
+                const { data, error } = await supabase
+                    .from('announcements')
+                    .select('*')
+                    .order('date', { ascending: false });
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    setAnnouncements(data);
+                } else {
+                    setAnnouncements(fallbackData);
+                }
             } catch (err) {
-                console.warn("Backend not connected yet. Using fallback data for announcements.");
+                console.warn("Supabase not connected yet or error fetching. Using fallback data.");
                 setAnnouncements(fallbackData);
             } finally {
                 setLoading(false);
@@ -98,7 +106,7 @@ export default function Announcements() {
                             {announcements.map((announcement) => (
                                 <motion.div
                                     variants={fadeUp}
-                                    key={announcement._id}
+                                    key={announcement.id}
                                     className={`bg-white rounded-2xl border-l-4 shadow-sm hover:shadow-lg transition-all duration-300 p-6 md:p-8 ${announcement.priority === 'High' ? 'border-l-red-500' :
                                         announcement.priority === 'Normal' ? 'border-l-primaryTechBlue' :
                                             'border-l-gray-400'

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, Cpu, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 export default function AdminLogin() {
-    const [username, setUsername] = useState('');
+    const [username, setUsername] = useState(''); // Use email in Supabase
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
@@ -16,26 +17,21 @@ export default function AdminLogin() {
         setLoading(true);
 
         try {
-            const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-            const res = await fetch(`${API}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: username,
+                password: password,
             });
 
-            const data = await res.json();
-
-            if (!res.ok) {
-                setError(data.message || 'Login failed.');
+            if (error) {
+                setError(error.message);
                 setLoading(false);
                 return;
             }
 
-            localStorage.setItem('lrnit_token', data.token);
-            localStorage.setItem('lrnit_user', data.username);
+            localStorage.setItem('lrnit_user', data.user.email);
             navigate('/lrnit-admin/dashboard');
         } catch (err) {
-            setError('Unable to connect to the server.');
+            setError('Unable to connect to Supabase.');
             setLoading(false);
         }
     };
