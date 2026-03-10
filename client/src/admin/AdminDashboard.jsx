@@ -5,7 +5,7 @@ import {
     Upload, X, Save, Cpu, Menu, ChevronDown
 } from 'lucide-react';
 
-const API = 'http://localhost:5000/api';
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 function getToken() {
     return localStorage.getItem('lrnit_token');

@@ -29,7 +29,7 @@ export default function Navbar() {
                     {/* Logo */}
                     <Link to="/" className="flex items-center space-x-2 group">
                         <div className="bg-transparent group-hover:bg-primaryTechBlue/5 transition-colors p-1 rounded-xl">
-                            <img src="/logo.png" alt="LRNit Logo" className="h-10 w-auto object-contain" />
+                            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="LRNit Logo" className="h-10 w-auto object-contain" />
                         </div>
                         <div className="flex flex-col">
                             <span className="font-display font-bold text-2xl tracking-tight text-deepCircuitBlue leading-none">
