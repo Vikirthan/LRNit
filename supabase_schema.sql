@@ -44,18 +44,40 @@ CREATE TABLE team (
 );
 
 -- Set up Row Level Security (RLS)
--- For this organization, we allow public read for everything
--- But write access should be authenticated (simplified for now)
-
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gallery ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team ENABLE ROW LEVEL SECURITY;
 
+-- 1. Public Read Policies
 CREATE POLICY "Allow public read" ON announcements FOR SELECT USING (true);
 CREATE POLICY "Allow public read" ON events FOR SELECT USING (true);
 CREATE POLICY "Allow public read" ON gallery FOR SELECT USING (true);
 CREATE POLICY "Allow public read" ON team FOR SELECT USING (true);
 
--- Note: You will need to add Policies for INSERT/UPDATE/DELETE 
--- based on your Auth requirements in the Supabase Dashboard.
+-- 2. Authenticated CRUD Policies (For your Admin Login)
+CREATE POLICY "Allow authenticated insert" ON announcements FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated update" ON announcements FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated delete" ON announcements FOR DELETE USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert" ON events FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated update" ON events FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated delete" ON events FOR DELETE USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert" ON gallery FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated update" ON gallery FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated delete" ON gallery FOR DELETE USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert" ON team FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated update" ON team FOR UPDATE USING (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated delete" ON team FOR DELETE USING (auth.role() = 'authenticated');
+
+-- 3. Storage Policies (If using 'images' bucket)
+-- Make sure to create the 'images' bucket first in the Storage dashboard
+-- These policies allow authenticated users to manage files
+INSERT INTO storage.buckets (id, name, public) VALUES ('images', 'images', true) ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "Allow authenticated upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'images' AND auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated update" ON storage.objects FOR UPDATE USING (bucket_id = 'images' AND auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated delete" ON storage.objects FOR DELETE USING (bucket_id = 'images' AND auth.role() = 'authenticated');
+CREATE POLICY "Allow public select" ON storage.objects FOR SELECT USING (bucket_id = 'images');
