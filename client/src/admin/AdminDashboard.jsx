@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
     LayoutDashboard, Calendar, Users, Image, LogOut, Plus, Trash2, Edit3,
-    Upload, X, Save, Cpu, Menu, ChevronDown
+    Upload, X, Save, Cpu, Menu, ChevronDown, ListTodo, BarChart3, Download, Eye, Layers
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
 // ─── Dashboard Overview ──────────────────────────────
 function Overview() {
-    const [stats, setStats] = useState({ events: 0, team: 0, gallery: 0, announcements: 0 });
+    const [stats, setStats] = useState({ events: 0, team: 0, gallery: 0, announcements: 0, forms: 0 });
 
     useEffect(() => {
         const fetchStats = async () => {
@@ -23,6 +23,7 @@ function Overview() {
                     supabase.from('team').select('*', { count: 'exact', head: true }),
                     supabase.from('gallery').select('*', { count: 'exact', head: true }),
                     supabase.from('announcements').select('*', { count: 'exact', head: true }),
+                    supabase.from('forms').select('*', { count: 'exact', head: true }),
                 ]);
 
                 setStats({
@@ -30,6 +31,7 @@ function Overview() {
                     team: teamCount || 0,
                     gallery: galleryCount || 0,
                     announcements: announcementsCount || 0,
+                    forms: formsCount || 0,
                 });
             } catch (err) {
                 console.error("Error fetching stats:", err);
@@ -43,6 +45,7 @@ function Overview() {
         { label: 'Team Members', count: stats.team, icon: <Users className="h-6 w-6" />, color: 'bg-purple-500', path: '/lrnit-admin/dashboard/team' },
         { label: 'Gallery Images', count: stats.gallery, icon: <Image className="h-6 w-6" />, color: 'bg-green-500', path: '/lrnit-admin/dashboard/gallery' },
         { label: 'Announcements', count: stats.announcements, icon: <LayoutDashboard className="h-6 w-6" />, color: 'bg-orange-500', path: '/lrnit-admin/dashboard/announcements' },
+        { label: 'Registration Forms', count: stats.forms, icon: <ListTodo className="h-6 w-6" />, color: 'bg-indigo-500', path: '/lrnit-admin/dashboard/forms' },
     ];
 
     return (
@@ -526,6 +529,330 @@ function AnnouncementsManager() {
     );
 }
 
+// ─── Forms & Registrations Manager ───────────────────────────
+function FormsManager() {
+    const [forms, setForms] = useState([]);
+    const [events, setEvents] = useState([]);
+    const [showForm, setShowForm] = useState(false);
+    const [viewResponses, setViewResponses] = useState(null); // Form ID to view responses
+    const [responses, setResponses] = useState([]);
+    const [editing, setEditing] = useState(null);
+    const [form, setForm] = useState({
+        title: '',
+        description: '',
+        event_id: '',
+        fields: [{ id: Date.now(), label: 'Full Name', type: 'text', required: true, options: [] }]
+    });
+
+    const loadForms = async () => {
+        const { data: formsData } = await supabase.from('forms').select('*, events(title)').order('created_at', { ascending: false });
+        setForms(formsData || []);
+
+        const { data: eventsData } = await supabase.from('events').select('id, title').order('date', { ascending: false });
+        setEvents(eventsData || []);
+    };
+
+    const loadResponses = async (formId) => {
+        const { data, error } = await supabase.from('registrations').select('*').eq('form_id', formId).order('created_at', { ascending: false });
+        if (!error) setResponses(data || []);
+    };
+
+    useEffect(() => { loadForms(); }, []);
+
+    const resetForm = () => {
+        setForm({
+            title: '',
+            description: '',
+            event_id: '',
+            fields: [{ id: Date.now(), label: 'Full Name', type: 'text', required: true, options: [] }]
+        });
+        setEditing(null);
+        setShowForm(false);
+    };
+
+    const addField = () => {
+        setForm({ ...form, fields: [...form.fields, { id: Date.now(), label: '', type: 'text', required: false, options: [] }] });
+    };
+
+    const addOption = (fieldId) => {
+        setForm({
+            ...form,
+            fields: form.fields.map(f => f.id === fieldId ? { ...f, options: [...(f.options || []), `Option ${(f.options?.length || 0) + 1}`] } : f)
+        });
+    };
+
+    const updateOption = (fieldId, optIndex, val) => {
+        setForm({
+            ...form,
+            fields: form.fields.map(f => f.id === fieldId ? {
+                ...f,
+                options: f.options.map((opt, i) => i === optIndex ? val : opt)
+            } : f)
+        });
+    };
+
+    const removeOption = (fieldId, optIndex) => {
+        setForm({
+            ...form,
+            fields: form.fields.map(f => f.id === fieldId ? {
+                ...f,
+                options: f.options.filter((_, i) => i !== optIndex)
+            } : f)
+        });
+    };
+
+    const removeField = (id) => {
+        if (form.fields.length <= 1) return;
+        setForm({ ...form, fields: form.fields.filter(f => f.id !== id) });
+    };
+
+    const updateField = (id, key, val) => {
+        setForm({ ...form, fields: form.fields.map(f => f.id === id ? { ...f, [key]: val } : f) });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const data = {
+            title: form.title,
+            description: form.description,
+            event_id: form.event_id || null,
+            fields: form.fields
+        };
+        if (editing) {
+            const { error } = await supabase.from('forms').update(data).eq('id', editing);
+            if (error) alert(error.message);
+        } else {
+            const { error } = await supabase.from('forms').insert([data]);
+            if (error) alert(error.message);
+        }
+        resetForm();
+        loadForms();
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm('Delete this form and all its responses?')) return;
+        const { error } = await supabase.from('forms').delete().eq('id', id);
+        if (error) alert(error.message);
+        loadForms();
+    };
+
+    const startEdit = (f) => {
+        setForm({
+            title: f.title,
+            description: f.description || '',
+            event_id: f.event_id || '',
+            fields: f.fields
+        });
+        setEditing(f.id);
+        setShowForm(true);
+    };
+
+    const exportToXLS = (activeForm) => {
+        if (responses.length === 0) return;
+
+        // Simple CSV approach which works well with Excel
+        const headers = ["Date", ...activeForm.fields.map(f => f.label)].join(",");
+        const rows = responses.map(r => {
+            const date = new Date(r.created_at).toLocaleDateString();
+            const vals = activeForm.fields.map(f => `"${String(r.data[f.label] || '').replace(/"/g, '""')}"`);
+            return [date, ...vals].join(",");
+        });
+
+        const csvContent = "\uFEFF" + [headers, ...rows].join("\n"); // Add BOM for Excel UTF-8 support
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `${activeForm.title.replace(/\s+/g, '_')}_registrations.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    if (viewResponses) {
+        const activeForm = forms.find(f => f.id === viewResponses);
+        return (
+            <div>
+                <div className="flex items-center justify-between mb-6">
+                    <button onClick={() => setViewResponses(null)} className="text-gray-400 hover:text-white flex items-center gap-2">
+                        <X className="h-4 w-4" /> Back to Forms
+                    </button>
+                    <button onClick={() => exportToXLS(activeForm)} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm">
+                        <Download className="h-4 w-4" /> Export CSV (Excel)
+                    </button>
+                </div>
+
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-white mb-2">{activeForm?.title}</h1>
+                    <p className="text-gray-400 text-sm">Review registrations and analytics</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-6">
+                        <p className="text-gray-400 text-sm mb-1">Total Registrations</p>
+                        <p className="text-3xl font-bold text-white">{responses.length}</p>
+                    </div>
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-xl overflow-x-auto">
+                    <table className="w-full text-left text-sm text-gray-300">
+                        <thead className="bg-white/5 text-gray-400 uppercase text-xs">
+                            <tr>
+                                <th className="px-6 py-4">Date</th>
+                                {activeForm?.fields.map(f => <th key={f.id} className="px-6 py-4">{f.label}</th>)}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {responses.map(r => (
+                                <tr key={r.id}>
+                                    <td className="px-6 py-4 whitespace-nowrap">{new Date(r.created_at).toLocaleDateString()}</td>
+                                    {activeForm?.fields.map(f => <td key={f.id} className="px-6 py-4">{r.data[f.label]}</td>)}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    {responses.length === 0 && <p className="text-center py-8 text-gray-500">No responses yet.</p>}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div>
+            <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold text-white">Registration Forms</h1>
+                <button onClick={() => { resetForm(); setShowForm(true); }} className="flex items-center gap-2 px-4 py-2 bg-primaryTechBlue text-white rounded-lg hover:bg-blue-600 transition text-sm">
+                    <Plus className="h-4 w-4" /> Create Form
+                </button>
+            </div>
+
+            {showForm && (
+                <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold text-white">{editing ? 'Edit Form' : 'New Form'}</h2>
+                        <button onClick={resetForm} className="text-gray-400 hover:text-white"><X className="h-5 w-5" /></button>
+                    </div>
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Form Title</label>
+                                <input className="admin-input" placeholder="Form Title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 mb-1 block">Map to Event (Optional)</label>
+                                <select className="admin-input" value={form.event_id} onChange={e => setForm({ ...form, event_id: e.target.value })}>
+                                    <option value="">No mapping</option>
+                                    {events.map(ev => <option key={ev.id} value={ev.id}>{ev.title}</option>)}
+                                </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="text-xs text-gray-500 mb-1 block">Form Description</label>
+                                <textarea className="admin-input" placeholder="Give some instructions..." rows="2" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-medium text-gray-300 flex items-center justify-between">
+                                Form Fields
+                                <button type="button" onClick={addField} className="text-xs text-primaryTechBlue hover:underline flex items-center gap-1">
+                                    <Plus className="h-3 w-3" /> Add Field
+                                </button>
+                            </h3>
+                            {form.fields.map((f, index) => (
+                                <div key={f.id} className="space-y-3 bg-white/5 p-4 rounded-lg relative group border border-white/5">
+                                    <div className="flex gap-3 items-end">
+                                        <div className="flex-1">
+                                            <input className="admin-input !bg-transparent !border-b !rounded-none !px-0" placeholder="Question Label" value={f.label} onChange={e => updateField(f.id, 'label', e.target.value)} required />
+                                        </div>
+                                        <div className="w-40 text-gray-300">
+                                            <select className="admin-input !bg-transparent !border-b !rounded-none !px-0" value={f.type} onChange={e => updateField(f.id, 'type', e.target.value)}>
+                                                <optgroup label="Text">
+                                                    <option value="text">Short answer</option>
+                                                    <option value="textarea">Paragraph</option>
+                                                </optgroup>
+                                                <optgroup label="Choices">
+                                                    <option value="radio">Multiple choice</option>
+                                                    <option value="checkbox">Checkboxes</option>
+                                                    <option value="select">Drop-down</option>
+                                                </optgroup>
+                                                <optgroup label="Advanced">
+                                                    <option value="date">Date</option>
+                                                    <option value="time">Time</option>
+                                                    <option value="number">Number</option>
+                                                    <option value="tel">Phone</option>
+                                                    <option value="email">Email</option>
+                                                </optgroup>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <input type="checkbox" checked={f.required} onChange={e => updateField(f.id, 'required', e.target.checked)} id={`req-${f.id}`} />
+                                            <label htmlFor={`req-${f.id}`} className="text-xs text-gray-500 cursor-pointer">Required</label>
+                                        </div>
+                                        <button type="button" onClick={() => removeField(f.id)} className="text-gray-500 hover:text-red-400 mb-2">
+                                            <Trash2 className="h-4 w-4" />
+                                        </button>
+                                    </div>
+
+                                    {/* Options for Choice Types */}
+                                    {['radio', 'checkbox', 'select'].includes(f.type) && (
+                                        <div className="pl-4 border-l border-white/10 space-y-2 mt-2">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-bold">Options</p>
+                                                <button type="button" onClick={() => addOption(f.id)} className="text-[10px] text-primaryTechBlue hover:underline font-bold">+ Add Option</button>
+                                            </div>
+                                            {f.options?.map((opt, optIdx) => (
+                                                <div key={optIdx} className="flex items-center gap-2 group/opt">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                                                    <input
+                                                        className="admin-input !p-1 !text-xs !bg-transparent !border-none !h-auto focus:!ring-0"
+                                                        value={opt}
+                                                        onChange={e => updateOption(f.id, optIdx, e.target.value)}
+                                                        placeholder={`Option ${optIdx + 1}`}
+                                                    />
+                                                    <button type="button" onClick={() => removeOption(f.id, optIdx)} className="opacity-0 group-hover/opt:opacity-100 text-gray-500 hover:text-red-400 transition-opacity">
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {(f.options?.length === 0 || !f.options) && <p className="text-center py-2 text-[10px] text-gray-600">No options added yet.</p>}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <button type="submit" className="flex items-center gap-2 px-6 py-2 bg-primaryTechBlue text-white rounded-lg hover:bg-blue-600 transition">
+                            <Save className="h-4 w-4" /> {editing ? 'Update Form' : 'Save Form'}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            <div className="space-y-3">
+                {forms.map(f => (
+                    <div key={f.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-between">
+                        <div>
+                            <h3 className="text-white font-medium">{f.title}</h3>
+                            <div className="flex gap-3 mt-1">
+                                <span className="text-xs text-gray-500 flex items-center gap-1"><Layers className="h-3 w-3" /> {f.fields.length} fields</span>
+                                {f.events?.title && <span className="text-xs text-blue-400 flex items-center gap-1"><Calendar className="h-3 w-3" /> Mapped to: {f.events.title}</span>}
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={async () => { setViewResponses(f.id); await loadResponses(f.id); }} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition flex items-center gap-1 text-xs">
+                                <BarChart3 className="h-4 w-4" /> Analytics
+                            </button>
+                            <button onClick={() => startEdit(f)} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition"><Edit3 className="h-4 w-4" /></button>
+                            <button onClick={() => handleDelete(f.id)} className="p-2 hover:bg-red-500/20 rounded-lg text-gray-400 hover:text-red-400 transition"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                    </div>
+                ))}
+                {forms.length === 0 && <p className="text-gray-500 text-center py-8">No forms created yet.</p>}
+            </div>
+        </div>
+    );
+}
+
 // ─── Main Dashboard Layout ──────────────────────────────
 export default function AdminDashboard() {
     const navigate = useNavigate();
@@ -556,6 +883,7 @@ export default function AdminDashboard() {
         { path: '/lrnit-admin/dashboard/team', label: 'Team', icon: <Users className="h-5 w-5" /> },
         { path: '/lrnit-admin/dashboard/gallery', label: 'Gallery', icon: <Image className="h-5 w-5" /> },
         { path: '/lrnit-admin/dashboard/announcements', label: 'Announcements', icon: <LayoutDashboard className="h-5 w-5" /> },
+        { path: '/lrnit-admin/dashboard/forms', label: 'Forms', icon: <ListTodo className="h-5 w-5" /> },
     ];
 
     const isActive = (path) => location.pathname === path;
@@ -618,6 +946,7 @@ export default function AdminDashboard() {
                         <Route path="team" element={<TeamManager />} />
                         <Route path="gallery" element={<GalleryManager />} />
                         <Route path="announcements" element={<AnnouncementsManager />} />
+                        <Route path="forms" element={<FormsManager />} />
                     </Routes>
                 </div>
             </main>

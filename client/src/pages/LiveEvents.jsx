@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, Clock, ArrowRight, Zap, Target } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
 const CATEGORIES = ['All', 'Technical', 'Non-Technical', 'Workshops', 'Competitions', 'Campus Activities'];
@@ -17,6 +18,7 @@ const fadeUp = {
 
 export default function LiveEvents() {
     const [events, setEvents] = useState([]);
+    const [forms, setForms] = useState({}); // Mapping event_id -> form_id
     const [loading, setLoading] = useState(true);
     const [activeCategory, setActiveCategory] = useState('All');
 
@@ -32,17 +34,23 @@ export default function LiveEvents() {
     useEffect(() => {
         const fetchEvents = async () => {
             try {
-                const { data, error } = await supabase
-                    .from('events')
-                    .select('*')
-                    .order('date', { ascending: false });
+                const [eventRes, formRes] = await Promise.all([
+                    supabase.from('events').select('*').order('date', { ascending: false }),
+                    supabase.from('forms').select('id, event_id').not('event_id', 'is', null)
+                ]);
 
-                if (error) throw error;
+                if (eventRes.error) throw eventRes.error;
 
-                if (data && data.length > 0) {
-                    setEvents(data);
+                if (eventRes.data && eventRes.data.length > 0) {
+                    setEvents(eventRes.data);
                 } else {
                     setEvents(fallbackData);
+                }
+
+                if (formRes.data) {
+                    const mapping = {};
+                    formRes.data.forEach(f => { mapping[f.event_id] = f.id; });
+                    setForms(mapping);
                 }
             } catch (err) {
                 console.warn("Supabase error fetching events. Using fallback data.");
@@ -157,9 +165,15 @@ export default function LiveEvents() {
                                             </div>
                                         </div>
 
-                                        <button className="self-start px-8 py-4 bg-white/20 hover:bg-white hover:text-deepCircuitBlue text-white rounded-xl font-medium transition-colors shadow-lg flex items-center group backdrop-blur-sm border border-white/20">
-                                            Register Now <ArrowRight className="ml-2 h-5 w-5 transform group-hover:translate-x-1 transition-transform" />
-                                        </button>
+                                        {forms[featuredEvent.id] ? (
+                                            <Link to={`/register/${forms[featuredEvent.id]}`} className="self-start px-8 py-4 bg-white/20 hover:bg-white hover:text-deepCircuitBlue text-white rounded-xl font-medium transition-colors shadow-lg flex items-center group backdrop-blur-sm border border-white/20">
+                                                Register Now <ArrowRight className="ml-2 h-5 w-5 transform group-hover:translate-x-1 transition-transform" />
+                                            </Link>
+                                        ) : (
+                                            <button className="self-start px-8 py-4 bg-white/20 hover:bg-gray-400 text-white rounded-xl font-medium transition-colors shadow-lg flex items-center group backdrop-blur-sm border border-white/20 cursor-not-allowed opacity-50">
+                                                Registration Closed
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             </motion.div>
@@ -242,9 +256,15 @@ export default function LiveEvents() {
                                                 <Calendar className="h-4 w-4 mr-2 text-gray-400" />
                                                 {new Date(event.date).toLocaleDateString()}
                                             </div>
-                                            <button className="text-primaryTechBlue hover:text-innovationPurple transition-colors font-medium flex items-center">
-                                                Details <ArrowRight className="h-4 w-4 ml-1" />
-                                            </button>
+                                            {forms[event.id] ? (
+                                                <Link to={`/register/${forms[event.id]}`} className="text-primaryTechBlue hover:text-innovationPurple transition-colors font-medium flex items-center">
+                                                    Register <ArrowRight className="h-4 w-4 ml-1" />
+                                                </Link>
+                                            ) : (
+                                                <button className="text-gray-400 font-medium flex items-center cursor-default">
+                                                    No Form <ArrowRight className="h-4 w-4 ml-1 opacity-20" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </motion.div>

@@ -131,9 +131,6 @@ export default function Gallery() {
                                                 {img.category}
                                             </span>
                                             <h3 className="text-xl font-display font-semibold text-white">{img.caption}</h3>
-                                            {img.date && (
-                                                <p className="text-white/70 text-sm mt-1">{new Date(img.date).toLocaleDateString()}</p>
-                                            )}
                                         </div>
                                     </motion.div>
                                 ))}
@@ -181,7 +178,6 @@ export default function Gallery() {
                                 <h3 className="text-2xl font-display font-bold text-white mb-2">{selectedImage.caption}</h3>
                                 <p className="text-white/60">
                                     <span className="text-innovationPurple font-medium mr-2">{selectedImage.category}</span>
-                                    {selectedImage.date && `• ${new Date(selectedImage.date).toLocaleDateString()}`}
                                 </p>
                             </div>
                         </motion.div>

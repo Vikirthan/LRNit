@@ -9,6 +9,7 @@ import Gallery from './pages/Gallery';
 import LiveEvents from './pages/LiveEvents';
 import ContactUs from './pages/ContactUs';
 import Announcements from './pages/Announcements';
+import RegistrationPage from './pages/RegistrationPage';
 import AdminLogin from './admin/AdminLogin';
 import AdminDashboard from './admin/AdminDashboard';
 
@@ -30,6 +31,7 @@ function App() {
           <Route path="/events" element={<LiveEvents />} />
           <Route path="/announcements" element={<Announcements />} />
           <Route path="/contact" element={<ContactUs />} />
+          <Route path="/register/:formId" element={<RegistrationPage />} />
 
           {/* Admin Routes - Hidden */}
           <Route path="/lrnit-admin" element={<AdminLogin />} />
